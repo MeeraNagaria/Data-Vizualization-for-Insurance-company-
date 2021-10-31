@@ -1,0 +1,208 @@
+---
+title: "Insurify (Take Home Data)"
+output:
+  pdf_document: default
+  word_document: default
+---
+## Packages
+
+```{r}
+library(dplyr)
+library(magrittr)
+library(tidyr)
+library(DAAG)
+library(ggplot2)
+library(lubridate)
+library(GGally)
+```
+
+## Reading Data
+
+```{r}
+
+Insurance = read.csv('insurance.csv')
+Conversion_rates=read.csv('conversion_rates.csv')
+
+```
+# Section I: Looking at Demographics + Medical Charges
+## 1.Read in Data and report summary statistics (mean + std / frequency) for age, sex, bmi, children,#smoker, and charges) by region.
+## Continuous
+```{r}
+Insurance %>%
+    group_by(region) %>%
+      summarise(
+        count = n(),
+        min = min(charges),
+        median = median(charges),
+        mean = mean(charges),
+        std = sd(charges),
+        max = max(charges),
+        IQR = IQR(charges)
+      ) %>%
+    arrange(desc(median)) 
+
+Insurance %>%
+    group_by(region) %>%
+      summarise(
+        count = n(),
+        min = min(bmi),
+        median = median(bmi),
+        mean = mean(bmi),
+        std = sd(bmi),
+        max = max(bmi),
+        IQR = IQR(bmi)
+      ) %>%
+    arrange(desc(median))
+
+Insurance %>%
+    group_by(region) %>%
+      summarise(
+        count = n(),
+        min = min(age),
+        median = median(age),
+        mean = mean(age),
+        std = sd(age),
+        max = max(age),
+        IQR = IQR(age)
+      ) %>%
+    arrange(desc(median))
+
+
+```
+## Categorical
+```{r}
+Insurance %>%
+    group_by(region) %>%
+      summarise(smoker) %>% table()
+     
+
+```
+## 2.How would you characterize this population? Use figures/tables to support you answer
+
+```{r}
+Insurance %>%
+    select(smoker, bmi, charges) %>%
+    ggplot(aes(color = smoker)) +
+    geom_point(mapping = aes(x = bmi, y = charges))
+```
+### Conclusion:People with BMI  > 30 and smokes pay high charges
+
+##3.In this sample, is female age different from male age?
+```{r}
+Insurance %>%
+    group_by(sex_male) %>%
+      summarise(
+        count = n(),
+        min = min(age),
+        median = median(age),
+        mean = mean(age),
+        median = sd(age),
+        max = max(age),
+        IQR = IQR(age)
+      ) %>%
+    arrange(desc(median)) 
+```
+### Conclusion:There is no difference between men and women ages, we can also see this with boxplot
+
+
+## 4.Is there a difference in smoking rates between those who have kids and those who do not?
+
+```{r}
+Insurance %>%
+    select(children, charges, smoker) %>%
+    filter(smoker=="1")%>%
+    filter(children=='0')%>%
+    ggplot(aes(x = children, y = charges, group = children)) +
+    geom_boxplot(outlier.alpha = 0.5, aes(fill = children)) +
+    theme(legend.position = "none")
+
+Insurance %>%
+    select(children, charges, smoker) %>%
+    filter(smoker=="1")%>%
+    filter(children %in% c('1','2','3','4','5','6'))%>%
+    ggplot(aes(x = children, y = charges, group = children)) +
+    geom_boxplot(outlier.alpha = 0.5, aes(fill = children)) +
+    theme(legend.position = "none")
+```
+### Conclusion:Children does not affect charge significantly
+
+## 5.Are there any instances of high collinearity in this data-set?
+
+```{r}
+cor(Insurance$age,Insurance$bmi)
+cor(Insurance$age,Insurance$children)
+cor(Insurance$bmi,Insurance$children)
+X<-Insurance[,c(1,3,4,7)]
+library(GGally)
+ggpairs(X)
+
+M<-lm(charges~., data=Insurance)
+vif(M)
+```
+### Conclusion:There are no instances of high collinarity in the dataset
+
+## 6.A coworker wants to know whether:- being male affects medical cost, being a smoker affects medical cost, what is the effect of each additional year on medical cost
+
+```{r}
+model<-lm(charges ~ sex_male + smoker + age, data = Insurance)
+summary(model)
+vif(model)
+```
+### Conclusion:From the above Regression model, we conclude that 1)Being male doesn't affect the model, 2)Being smoker does affect the model and 3) The medical cost increases as the age increases.
+
+### On the basis of lev of significance,it is observed that age and smoker are statistically significant as compared to sex as the p-values are lesser than level of significance (0.05)
+
+## 7.Your boss comes to you and says we want to limit patients that may cost more than 50K.  You don't need to write code to do this, but outline how you could create a model that would take a new patient's characteristics and output the probability that their medical charges would be over 50K.
+
+### I would create a new column say “Charges_flag” where the charges >50000 will be 1 and <50000 will be 0. Considering “Charges_flag” as the target column and the other characteristics as the input columns, calculate the probability using any binary classification algorithm like SVM, Binomial Logistic Regression.
+
+### The evaluate the effectiveness of the model I would calculate the confusion matrix (accuracy, precision, recall, F1 score, AUC-ROC curve)
+
+### On basis of the output of the model, we will define the value of X, beyond which the the patient would cost>50,000. (General assumption X=0.5, for a well balanced class)
+
+# Section II: Checking Conversion Rates
+## Conversion Rates
+```{r}
+
+Conversion_rates$converted = ifelse(Conversion_rates$has_insurance == 0 & Conversion_rates$reached_end == 1,1,0 )
+
+Conversion_rates$date <- as.Date(Conversion_rates$date, format = "%Y-%m-%d")
+before <- sum(Conversion_rates[which(Conversion_rates$date < ymd('2018-09-05')), 7])
+before<- before/nrow(Conversion_rates)
+after <- sum(Conversion_rates[which(Conversion_rates$date >= as.Date('2018-09-05')), 7])
+after <- after/nrow(Conversion_rates)
+
+before <- sum(Conversion_rates[which(Conversion_rates$date < ymd('2018-09-05')), 6])
+before<- before/nrow(Conversion_rates)
+after <- sum(Conversion_rates[which(Conversion_rates$date >= as.Date('2018-09-05')), 6])
+after <- after/nrow(Conversion_rates)
+```
+## Conclusion: The conversion rate from 5th onwards after the new feature launch is 13.9% whereas the rate before the feature launch is 8.9% on the overall dataset. (Assuming that there is no existing customer present)
+##Considering another assumption where "has_insurance" could be 1/0, but if customer reaches end - considered as converted. In that case after 30%, before 5th it is 16%
+
+```{r}
+altered<-Conversion_rates%>%
+  
+  filter(date >= as.Date("2018-09-05"))
+  
+ggplot(altered, aes(x=came_from, y=converted)) + 
+  geom_bar(stat = "identity",width=0.4,fill="cyan") 
+
+ggplot(Conversion_rates, aes(x=male, y=converted)) + 
+  geom_bar(stat = "identity",width=0.7,fill="steelblue") 
+
+ggplot(altered, aes(x=age, y=converted)) + 
+  geom_bar(stat = "identity",width=0.7,fill="blue") 
+
+
+```
+## Recommendation : Company can target customers of age 34 and 35 years as there is a high probabilty of conversion.There is no difference observed between gender.Another recommention is to check what different features are used by Insurance Site A, as least customers are converted who visited from Insurance Site A.
+
+# Section III - Visualizing Data
+## The single figure that would help the executive team to grow the business is as follows: Age is binned with an interval of 5 years for customers w/o policy bought. Statistical analysis was then performed on the Policy amount and is presented in the figure below. Error bars denote the standard deviation.
+
+### Insights: 
+### 1)	Highest sale is made by the age group 40-45 with the min policy value of $300 and average value from all 3 groups is $447. 
+### 2)	Even though group C had the lowest intent, overall customers from group C bought the policy with an equivalent amount of group A, who had the highest intent. 
+
+
